@@ -17,21 +17,27 @@ app.use(express.json());
 app.use(cors()); // allow local dev; remove or restrict in production
 
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
+
 if (!OPENAI_KEY) {
   console.warn(
     "OPENAI_API_KEY not set. Set environment variable before running the server."
   );
 }
 
+const moveMatcher = /\b[a-h][1-8][a-h][1-8][qrbn]?\b/i; // regex to match UCI move like e2e4 or e7e8q
+
 app.post("/ai-move", async (req, res) => {
   try {
     const { fen, history } = req.body;
-    if (!fen) return res.status(400).send("Missing fen");
+
+    if (!fen || !moveMatcher.test(fen)) {
+      return res.status(400).send("Missing fen");
+    }
 
     // Craft a strict prompt asking the model to return a single move in UCI format.
     const system = `You are a chess move generator. You MUST respond with exactly one move in UCI format (e.g. e2e4, g1f3, e7e8q for promotion) and nothing else. Do NOT include commentary, explanation, JSON, or any extra text. If you cannot find a legal move, respond with PASS. Use standard algebraic coordinates: a1..h8. Assume position FEN provided is to move. Use reasonable chess knowledge but do not invent illegal moves. Avoid castling if unclear.`;
     const user = `FEN: ${fen}\nMove history: ${JSON.stringify(
-      history || []
+      Array.isArray(history) ? history.map(String) : []
     )}\nRespond with one UCI move only.`;
 
     // Use Chat Completions or Responses endpoint depending on availability.
@@ -70,7 +76,7 @@ app.post("/ai-move", async (req, res) => {
       return res.status(500).send("Empty reply from OpenAI");
     }
     // Extract first token that looks like a move pattern (e.g. e2e4 or e7e8q)
-    const m = reply.trim().match(/[a-h][1-8][-]?[a-h][1-8][qnrb]?/i);
+    const m = reply.trim().match(moveMatcher);
     const move = m ? m[0].replace("-", "") : null;
     if (!move) {
       console.warn("Could not parse move from model reply:", reply);
