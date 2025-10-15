@@ -43,7 +43,7 @@ app.post("/ai-move", async (req, res) => {
     // Use Chat Completions or Responses endpoint depending on availability.
     // Here we call the Chat Completions endpoint.
     const body = {
-      model: "gpt-4o-mini", // placeholder model; replace with available ChatGPT model in your account
+      model: process.env.  || "gpt-4o-mini", // placeholder model; replace with available ChatGPT model in your account
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
