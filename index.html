@@ -190,12 +190,12 @@
     <!-- inline SVG piece set (simple, small, readable shapes). We use image sprites via data URLs generated below. -->
     <script>
       /* -------------------------
-      Minimal chess logic & UI
-      - Board stored as 8x8 array with piece objects {t:'p','n','b','r','q','k', c:'w'|'b'}
-      - Coordinates: a1 bottom-left -> board[7][0] etc.
-      - No checks detection. No castling, no en-passant.
-      - Promotion: automatic to queen when reaching last rank.
-      ------------------------- */
+         Minimal chess logic & UI
+         - Board stored as 8x8 array with piece objects {t:'p','n','b','r','q','k', c:'w'|'b'}
+         - Coordinates: a1 bottom-left -> board[7][0] etc.
+         - No checks detection. No castling, no en-passant.
+         - Promotion: automatic to queen when reaching last rank.
+         ------------------------- */
 
       const pieceGlyphs = {
         // We'll draw text-based simple SVG for each piece; client-side generate data URLs
@@ -332,11 +332,11 @@
       }
 
       /* -------------------------
-   Movement rules (simplified, but functional):
-   - Each piece has basic movement; does not check for checks/checkmates.
-   - No castling, no en-passant.
-   - Promotion to queen automatically.
-   ------------------------- */
+      Movement rules (simplified, but functional):
+      - Each piece has basic movement; does not check for checks/checkmates.
+      - No castling, no en-passant.
+      - Promotion to queen automatically.
+      ------------------------- */
 
       function legalMovesFrom(r, f) {
         const p = state.board[r][f];
@@ -418,11 +418,8 @@
         return moves;
       }
 
-      function saveState(history) {
-        localStorage.setItem(
-          "history",
-          JSON.stringify(history || state.history)
-        );
+      function saveState() {
+        localStorage.setItem("history", JSON.stringify(state));
       }
 
       function squareName(r, f) {
@@ -475,9 +472,9 @@
       }
 
       /* -------------------------
-   Pointer (mouse + touch) drag support
-   - creates a ghost image, highlights legal targets
-   ------------------------- */
+      Pointer (mouse + touch) drag support
+      - creates a ghost image, highlights legal targets
+      ------------------------- */
 
       let dragging = null;
       let ghost = null;
@@ -565,8 +562,8 @@
       }
 
       /* -------------------------
-   Moves list UI
-   ------------------------- */
+      Moves list UI
+      ------------------------- */
       function renderMoves() {
         movesList.innerHTML = "";
         for (let i = 0; i < state.history.length; i++) {
@@ -583,11 +580,11 @@
       }
 
       /* -------------------------
-   AI integration notes:
-   - askAIMove() sends a compact board description to server /ai-move
-   - server returns a UCI move like 'e2e4'
-   - apply the move locally.
-   ------------------------- */
+      AI integration notes:
+      - askAIMove() sends a compact board description to server /ai-move
+      - server returns a UCI move like 'e2e4'
+      - apply the move locally.
+      ------------------------- */
 
       function boardToFEN() {
         // very simple FEN without extra fields; used by server prompt.
@@ -670,11 +667,22 @@
         }
       }
 
-      window.addEventListener('DOMContentLoaded', function() {
+      window.addEventListener("DOMContentLoaded", function () {
         /* initial start */
-        const history = localStorage.getItem("history") || "[]";
+        const history = localStorage.getItem("history");
         newGame();
-        state.history = JSON.parse(history);
+
+        if (history) {
+          try {
+            const a = JSON.parse(history);
+            Object.assign(state, a);
+            saveState();
+          } catch (e) {
+            console.log(e);
+          }
+        }
+
+        render();
       });
     </script>
   </body>
