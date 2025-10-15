@@ -49,7 +49,6 @@ app.post("/ai-move", async (req, res) => {
         { role: "user", content: user },
       ],
       max_completion_tokens: 20,
-      temperature: 0.2,
     };
 
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
