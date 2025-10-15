@@ -34,10 +34,6 @@ app.post("/ai-move", async (req, res) => {
       return res.status(400).send("Missing next move");
     }
 
-    if (!fen.split("-").every((x) => moveMatcher.test(x))) {
-      return res.status(400).send("Invalid FEN format");
-    }
-
     // Craft a strict prompt asking the model to return a single move in UCI format.
     const system = `You are a chess move generator. You MUST respond with exactly one move in UCI format (e.g. e2e4, g1f3, e7e8q for promotion) and nothing else. Do NOT include commentary, explanation, JSON, or any extra text. If you cannot find a legal move, respond with PASS. Use standard algebraic coordinates: a1..h8. Assume position FEN provided is to move. Use reasonable chess knowledge but do not invent illegal moves. Avoid castling if unclear.`;
     const user = `FEN: ${fen}\nMove history: ${JSON.stringify(
