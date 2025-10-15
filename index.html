@@ -190,12 +190,12 @@
     <!-- inline SVG piece set (simple, small, readable shapes). We use image sprites via data URLs generated below. -->
     <script>
       /* -------------------------
-   Minimal chess logic & UI
-   - Board stored as 8x8 array with piece objects {t:'p','n','b','r','q','k', c:'w'|'b'}
-   - Coordinates: a1 bottom-left -> board[7][0] etc.
-   - No checks detection. No castling, no en-passant.
-   - Promotion: automatic to queen when reaching last rank.
-   ------------------------- */
+      Minimal chess logic & UI
+      - Board stored as 8x8 array with piece objects {t:'p','n','b','r','q','k', c:'w'|'b'}
+      - Coordinates: a1 bottom-left -> board[7][0] etc.
+      - No checks detection. No castling, no en-passant.
+      - Promotion: automatic to queen when reaching last rank.
+      ------------------------- */
 
       const pieceGlyphs = {
         // We'll draw text-based simple SVG for each piece; client-side generate data URLs
@@ -670,9 +670,12 @@
         }
       }
 
-      /* initial start */
-      newGame();
-      state.history = JSON.parse(localStorage.getItem("history") || "[]");
+      window.addEventListener('DOMContentLoaded', function() {
+        /* initial start */
+        const history = localStorage.getItem("history") || "[]";
+        newGame();
+        state.history = JSON.parse(history);
+      });
     </script>
   </body>
 </html>
