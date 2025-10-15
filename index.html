@@ -276,6 +276,7 @@
         state.turn = "w";
         state.history = [];
         render();
+        saveState();
       }
 
       newBtn.addEventListener("click", newGame);
@@ -470,6 +471,7 @@
         state.board[tr][tf] = captured || null;
         state.turn = state.turn === "w" ? "b" : "w";
         render();
+        saveState();
       }
 
       /* -------------------------
@@ -670,6 +672,7 @@
 
       /* initial start */
       newGame();
+      state.history = JSON.parse(localStorage.getItem("history") || "[]");
     </script>
   </body>
 </html>
