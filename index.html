@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Chess by CSS+JS + ChatGPT AI (demo)</title>
+    <style>
+      /* mobile-friendly centered layout */
+      :root {
+        --light: #f0d9b5;
+        --dark: #b58863;
+        --accent: #2b7cff;
+        --board-size: min(92vw, 640px);
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto,
+          "Helvetica Neue", Arial;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: #0f1724;
+        color: #e6eef8;
+      }
+      .app {
+        max-width: 900px;
+        width: 100%;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      h1 {
+        font-size: 1.05rem;
+        margin: 0;
+      }
+      button {
+        background: var(--accent);
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-weight: 600;
+      }
+      .board-wrap {
+        display: flex;
+        gap: 12px;
+        flex-direction: column;
+        align-items: center;
+      }
+      .board {
+        width: var(--board-size);
+        height: var(--board-size);
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        grid-template-rows: repeat(8, 1fr);
+        border-radius: 12px;
+        overflow: hidden;
+        touch-action: none; /* allow touch handling */
+        user-select: none;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+      }
+      .square {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: calc(var(--board-size) / 12);
+        -webkit-tap-highlight-color: transparent;
+      }
+      .square.light {
+        background: var(--light);
+      }
+      .square.dark {
+        background: var(--dark);
+      }
+      .square.highlight {
+        outline: 4px solid rgba(43, 124, 255, 0.22);
+        box-sizing: border-box;
+      }
+      .piece {
+        width: 86%;
+        height: 86%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: grab;
+        touch-action: none;
+      }
+      .piece img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        pointer-events: none;
+        user-select: none;
+      }
+      .hud {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin-top: 8px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .small {
+        font-size: 0.9rem;
+        opacity: 0.9;
+      }
+      .moves {
+        max-height: 140px;
+        overflow: auto;
+        background: rgba(255, 255, 255, 0.03);
+        padding: 8px;
+        border-radius: 8px;
+      }
+      .row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      @media (min-width: 900px) {
+        .board-wrap {
+          flex-direction: row;
+          align-items: flex-start;
+        }
+        .moves {
+          max-height: 500px;
+        }
+      }
+      /* simple drag ghost */
+      .ghost {
+        position: fixed;
+        pointer-events: none;
+        z-index: 9999;
+        opacity: 0.95;
+        transform: translate(-50%, -50%);
+      }
+      /* small labels for coordinates */
+      .coord {
+        position: absolute;
+        color: rgba(0, 0, 0, 0.35);
+        font-size: 11px;
+        bottom: 4px;
+        right: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <h1>Chess • Play vs ChatGPT</h1>
+        <div>
+          <button id="newBtn">New Game</button>
+          <button id="undoBtn">Undo</button>
+        </div>
+      </header>
+
+      <div class="board-wrap">
+        <div id="board" class="board" role="grid" aria-label="Chessboard"></div>
+
+        <div style="min-width: 220px; max-width: 260px">
+          <div class="row small">
+            <strong>Turn:</strong>&nbsp;<span id="turnLabel">White</span>
+          </div>
+          <div class="row small">
+            <strong>Last move:</strong>&nbsp;<span id="lastMove">—</span>
+          </div>
+          <div style="height: 8px"></div>
+          <div><strong>Moves</strong></div>
+          <div id="movesList" class="moves small"></div>
+          <div style="height: 8px"></div>
+          <div class="row">
+            <button id="aiBtn">Ask AI to move</button>
+          </div>
+          <div style="height: 12px"></div>
+          <div class="small">
+            Touch/drag to move. Promotion -> choose queen automatically.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- inline SVG piece set (simple, small, readable shapes). We use image sprites via data URLs generated below. -->
+    <script>
+      /* -------------------------
+   Minimal chess logic & UI
+   - Board stored as 8x8 array with piece objects {t:'p','n','b','r','q','k', c:'w'|'b'}
+   - Coordinates: a1 bottom-left -> board[7][0] etc.
+   - No checks detection. No castling, no en-passant.
+   - Promotion: automatic to queen when reaching last rank.
+   ------------------------- */
+
+      const pieceGlyphs = {
+        // We'll draw text-based simple SVG for each piece; client-side generate data URLs
+        wK: "♔",
+        wQ: "♕",
+        wR: "♖",
+        wB: "♗",
+        wN: "♘",
+        wP: "♙",
+        bK: "♚",
+        bQ: "♛",
+        bR: "♜",
+        bB: "♝",
+        bN: "♞",
+        bP: "♟",
+      };
+
+      const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
+      let boardEl = document.getElementById("board");
+      let newBtn = document.getElementById("newBtn");
+      let undoBtn = document.getElementById("undoBtn");
+      let aiBtn = document.getElementById("aiBtn");
+      let turnLabel = document.getElementById("turnLabel");
+      let lastMoveEl = document.getElementById("lastMove");
+      let movesList = document.getElementById("movesList");
+
+      let state = {
+        board: null,
+        turn: "w",
+        history: [],
+      };
+
+      // initialize default chess starting position
+      function newGame() {
+        state.board = [
+          [
+            { t: "r", c: "b" },
+            { t: "n", c: "b" },
+            { t: "b", c: "b" },
+            { t: "q", c: "b" },
+            { t: "k", c: "b" },
+            { t: "b", c: "b" },
+            { t: "n", c: "b" },
+            { t: "r", c: "b" },
+          ],
+          [
+            { t: "p", c: "b" },
+            { t: "p", c: "b" },
+            { t: "p", c: "b" },
+            { t: "p", c: "b" },
+            { t: "p", c: "b" },
+            { t: "p", c: "b" },
+            { t: "p", c: "b" },
+            { t: "p", c: "b" },
+          ],
+          ...Array.from({ length: 4 }, () => Array(8).fill(null)),
+          [
+            { t: "p", c: "w" },
+            { t: "p", c: "w" },
+            { t: "p", c: "w" },
+            { t: "p", c: "w" },
+            { t: "p", c: "w" },
+            { t: "p", c: "w" },
+            { t: "p", c: "w" },
+            { t: "p", c: "w" },
+          ],
+          [
+            { t: "r", c: "w" },
+            { t: "n", c: "w" },
+            { t: "b", c: "w" },
+            { t: "q", c: "w" },
+            { t: "k", c: "w" },
+            { t: "b", c: "w" },
+            { t: "n", c: "w" },
+            { t: "r", c: "w" },
+          ],
+        ];
+        state.turn = "w";
+        state.history = [];
+        render();
+      }
+
+      newBtn.addEventListener("click", newGame);
+      undoBtn.addEventListener("click", undo);
+      aiBtn.addEventListener("click", askAIMove);
+
+      // render board
+      function render() {
+        boardEl.innerHTML = "";
+        const size = 8;
+        for (let r = 0; r < size; r++) {
+          for (let f = 0; f < size; f++) {
+            const sq = document.createElement("div");
+            sq.className = "square " + ((r + f) % 2 ? "dark" : "light");
+            sq.dataset.r = r;
+            sq.dataset.f = f;
+            // coordinates labels (a1 at bottom-left). compute file/rank for UI: r index 0 is top row -> rank 8
+            const rank = 8 - r;
+            const file = files[f];
+            const coord = document.createElement("div");
+            coord.className = "coord";
+            coord.textContent = file + rank;
+            sq.appendChild(coord);
+
+            const piece = state.board[r][f];
+            if (piece) {
+              const pEl = document.createElement("div");
+              pEl.className = "piece";
+              pEl.draggable = false;
+              pEl.dataset.t = piece.t;
+              pEl.dataset.c = piece.c;
+              pEl.dataset.r = r;
+              pEl.dataset.f = f;
+              pEl.innerHTML = pieceToSVG(piece);
+              sq.appendChild(pEl);
+              // attach pointer handlers for drag / touch
+              attachPointerHandlers(pEl);
+            }
+            boardEl.appendChild(sq);
+          }
+        }
+        turnLabel.textContent = state.turn === "w" ? "White" : "Black";
+        renderMoves();
+      }
+
+      function pieceToSVG(piece) {
+        const key = (piece.c === "w" ? "w" : "b") + piece.t.toUpperCase();
+        const glyph = pieceGlyphs[key] || "?";
+        // simple svg style: big glyph centered
+        const svg = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><text x="50" y="62" font-size="66" text-anchor="middle" dominant-baseline="middle" font-family="serif">${glyph}</text></svg>`;
+        const data = "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+        return `<img src="${data}" alt="${piece.c}${piece.t}" />`;
+      }
+
+      /* -------------------------
+   Movement rules (simplified, but functional):
+   - Each piece has basic movement; does not check for checks/checkmates.
+   - No castling, no en-passant.
+   - Promotion to queen automatically.
+   ------------------------- */
+
+      function legalMovesFrom(r, f) {
+        const p = state.board[r][f];
+        if (!p) return [];
+        const moves = [];
+        const ally = p.c;
+        const enemy = ally === "w" ? "b" : "w";
+        const inBounds = (rr, ff) => rr >= 0 && rr < 8 && ff >= 0 && ff < 8;
+
+        if (p.t === "p") {
+          const dir = p.c === "w" ? -1 : 1;
+          const startRow = p.c === "w" ? 6 : 1;
+          // forward single
+          const fr = r + dir;
+          if (inBounds(fr, f) && !state.board[fr][f]) moves.push([fr, f]);
+          // double from start
+          const fr2 = r + 2 * dir;
+          if (r === startRow && !state.board[fr][f] && !state.board[fr2][f])
+            moves.push([fr2, f]);
+          // captures
+          for (const df of [-1, 1]) {
+            const cf = f + df;
+            if (
+              inBounds(fr, cf) &&
+              state.board[fr][cf] &&
+              state.board[fr][cf].c === enemy
+            )
+              moves.push([fr, cf]);
+          }
+        } else if (p.t === "n") {
+          const deltas = [
+            [-2, -1],
+            [-2, 1],
+            [-1, -2],
+            [-1, 2],
+            [1, -2],
+            [1, 2],
+            [2, -1],
+            [2, 1],
+          ];
+          for (const [dr, df] of deltas) {
+            const rr = r + dr,
+              ff = f + df;
+            if (!inBounds(rr, ff)) continue;
+            if (!state.board[rr][ff] || state.board[rr][ff].c !== ally)
+              moves.push([rr, ff]);
+          }
+        } else if (p.t === "b" || p.t === "r" || p.t === "q") {
+          const dirs = [];
+          if (p.t === "b" || p.t === "q")
+            dirs.push([-1, -1], [-1, 1], [1, -1], [1, 1]);
+          if (p.t === "r" || p.t === "q")
+            dirs.push([-1, 0], [1, 0], [0, -1], [0, 1]);
+          for (const [dr, df] of dirs) {
+            let rr = r + dr,
+              ff = f + df;
+            while (inBounds(rr, ff)) {
+              if (!state.board[rr][ff]) {
+                moves.push([rr, ff]);
+              } else {
+                if (state.board[rr][ff].c !== ally) moves.push([rr, ff]);
+                break;
+              }
+              rr += dr;
+              ff += df;
+            }
+          }
+        } else if (p.t === "k") {
+          for (let dr = -1; dr <= 1; dr++)
+            for (let df = -1; df <= 1; df++) {
+              if (dr === 0 && df === 0) continue;
+              const rr = r + dr,
+                ff = f + df;
+              if (!inBounds(rr, ff)) continue;
+              if (!state.board[rr][ff] || state.board[rr][ff].c !== ally)
+                moves.push([rr, ff]);
+            }
+        }
+        return moves;
+      }
+
+      function saveState(history) {
+        localStorage.setItem(
+          "history",
+          JSON.stringify(history || state.history)
+        );
+      }
+
+      function squareName(r, f) {
+        return files[f] + (8 - r);
+      }
+      function coordsFromSquareName(s) {
+        if (typeof s !== "string") return null;
+        const f = files.indexOf(s[0]);
+        const rank = parseInt(s[1], 10);
+        const r = 8 - rank;
+        return [r, f];
+      }
+
+      function makeMove(from, to, options = { record: true }) {
+        const [fr, ff] = from;
+        const [tr, tf] = to;
+        const piece = state.board[fr][ff];
+        if (!piece) return false;
+        // promotion: pawn reaching last rank -> queen
+        if (piece.t === "p" && (tr === 0 || tr === 7)) {
+          piece = { t: "q", c: piece.c };
+        }
+        // move
+        const captured = state.board[tr][tf];
+        state.board[tr][tf] = piece;
+        state.board[fr][ff] = null;
+        const moveSAN =
+          squareName(fr, ff) + "-" + squareName(tr, tf) + (captured ? "x" : "");
+        if (options.record) {
+          state.history.push({ from: [fr, ff], to: [tr, tf], piece, captured });
+          lastMoveEl.textContent = moveSAN;
+          saveState();
+        }
+        state.turn = state.turn === "w" ? "b" : "w";
+        render();
+        return true;
+      }
+
+      function undo() {
+        const last = state.history.pop();
+        if (!last) return;
+        const { from, to, piece, captured } = last;
+        const [fr, ff] = from,
+          [tr, tf] = to;
+        state.board[fr][ff] = piece;
+        state.board[tr][tf] = captured || null;
+        state.turn = state.turn === "w" ? "b" : "w";
+        render();
+      }
+
+      /* -------------------------
+   Pointer (mouse + touch) drag support
+   - creates a ghost image, highlights legal targets
+   ------------------------- */
+
+      let dragging = null;
+      let ghost = null;
+
+      function attachPointerHandlers(el) {
+        el.addEventListener("pointerdown", onPointerDown);
+        el.addEventListener(
+          "touchstart",
+          (e) => {
+            /* prevent double handling */
+          },
+          { passive: false }
+        );
+      }
+
+      function onPointerDown(e) {
+        e.preventDefault();
+        const el = e.currentTarget;
+        const sr = Number(el.dataset.r),
+          sf = Number(el.dataset.f);
+        const piece = state.board[sr][sf];
+        if (!piece) return;
+        if (piece.c !== state.turn) return; // can't move opponent
+        // get legal targets
+        const targets = legalMovesFrom(sr, sf);
+        if (targets.length === 0) return;
+        // create ghost
+        dragging = { el, sr, sf, piece, targets };
+        ghost = el.cloneNode(true);
+        ghost.classList.add("ghost");
+        document.body.appendChild(ghost);
+        moveGhost(e.clientX, e.clientY);
+        el.style.visibility = "hidden";
+
+        // highlight squares
+        document
+          .querySelectorAll(".square")
+          .forEach((sq) => sq.classList.remove("highlight"));
+        for (const [tr, tf] of targets) {
+          const sq = document.querySelector(
+            `.square[data-r="${tr}"][data-f="${tf}"]`
+          );
+          if (sq) sq.classList.add("highlight");
+        }
+
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", onPointerUp, { once: true });
+      }
+
+      function onPointerMove(e) {
+        if (!ghost) return;
+        moveGhost(e.clientX, e.clientY);
+      }
+
+      function moveGhost(x, y) {
+        ghost.style.left = x + "px";
+        ghost.style.top = y + "px";
+      }
+
+      function onPointerUp(e) {
+        if (!dragging) return;
+        const x = e.clientX,
+          y = e.clientY;
+        const elAt = document.elementFromPoint(x, y);
+        let sq = elAt;
+        while (sq && !sq.classList.contains("square")) sq = sq.parentElement;
+        const [tr, tf] = sq
+          ? [Number(sq.dataset.r), Number(sq.dataset.f)]
+          : [-1, -1];
+        // check if target in legal list
+        let ok = dragging.targets.some((t) => t[0] === tr && t[1] === tf);
+        if (ok) {
+          makeMove([dragging.sr, dragging.sf], [tr, tf]);
+          askAIMove();
+        }
+        // cleanup
+        document
+          .querySelectorAll(".square")
+          .forEach((sq) => sq.classList.remove("highlight"));
+        dragging.el.style.visibility = "visible";
+        ghost.remove();
+        ghost = null;
+        dragging = null;
+        window.removeEventListener("pointermove", onPointerMove);
+      }
+
+      /* -------------------------
+   Moves list UI
+   ------------------------- */
+      function renderMoves() {
+        movesList.innerHTML = "";
+        for (let i = 0; i < state.history.length; i++) {
+          const m = state.history[i];
+          const el = document.createElement("div");
+          el.textContent =
+            i +
+            1 +
+            ". " +
+            (squareName(...m.from) + "-" + squareName(...m.to)) +
+            (m.captured ? " x" : "");
+          movesList.appendChild(el);
+        }
+      }
+
+      /* -------------------------
+   AI integration notes:
+   - askAIMove() sends a compact board description to server /ai-move
+   - server returns a UCI move like 'e2e4'
+   - apply the move locally.
+   ------------------------- */
+
+      function boardToFEN() {
+        // very simple FEN without extra fields; used by server prompt.
+        let fen = "";
+        for (let r = 0; r < 8; r++) {
+          let empty = 0;
+          for (let f = 0; f < 8; f++) {
+            const p = state.board[r][f];
+            if (!p) {
+              empty++;
+            } else {
+              if (empty) {
+                fen += empty;
+                empty = 0;
+              }
+              const ch = p.c === "w" ? p.t.toUpperCase() : p.t.toLowerCase();
+              fen += ch;
+            }
+          }
+          if (empty) fen += empty;
+          if (r !== 7) fen += "/";
+        }
+        fen += " " + (state.turn === "w" ? "w" : "b");
+        return fen;
+      }
+
+      async function askAIMove() {
+        // Send FEN & history to backend
+        const payload = {
+          fen: boardToFEN(),
+          history: state.history.map((h) => ({
+            from: squareName(...h.from),
+            to: squareName(...h.to),
+          })),
+        };
+        aiBtn.disabled = true;
+        aiBtn.textContent = "Thinking...";
+        try {
+          const resp = await fetch("/ai-move", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (!resp.ok) {
+            const txt = await resp.text();
+            alert("AI error: " + txt);
+            return;
+          }
+          const data = await resp.json();
+          if (!data.move) {
+            alert("AI returned no move");
+            return;
+          }
+          // parse UCI (e2e4 like). Convert to coords:
+          const move = data.move.trim();
+          // allow forms like e2e4 or e7-e5
+          const u = move.replace("-", "").slice(0, 4);
+          const from = coordsFromSquareName(u.slice(0, 2));
+          const to = coordsFromSquareName(u.slice(2, 4));
+          if (from && to) {
+            // sanity: is it a legal move per our rules? If not, still attempt to move.
+            const legal = legalMovesFrom(from[0], from[1]).some(
+              (m) => m[0] === to[0] && m[1] === to[1]
+            );
+            if (!legal) {
+              console.warn(
+                "AI suggested illegal move (per simplified rules). forcing move anyway."
+              );
+            }
+            makeMove(from, to);
+          } else {
+            alert("AI returned unrecognized move: " + move);
+          }
+        } catch (err) {
+          console.error(err);
+          alert("Error contacting AI: " + err.message);
+        } finally {
+          aiBtn.disabled = false;
+          aiBtn.textContent = "Let AI move (server)";
+        }
+      }
+
+      /* initial start */
+      newGame();
+    </script>
+  </body>
+</html>
