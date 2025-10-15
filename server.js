@@ -66,6 +66,7 @@ app.post("/ai-move", async (req, res) => {
       return res.status(500).send("OpenAI API error: " + txt);
     }
     const j = await r.json();
+    console.log(j);
     const reply =
       j.choices &&
       j.choices[0] &&
