@@ -48,7 +48,7 @@ app.post("/ai-move", async (req, res) => {
         { role: "system", content: system },
         { role: "user", content: user },
       ],
-      max_tokens: 20,
+      max_completion_tokens: 20,
       temperature: 0.2,
     };
 
