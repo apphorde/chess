@@ -30,8 +30,12 @@ app.post("/ai-move", async (req, res) => {
   try {
     const { fen, history } = req.body;
 
-    if (!fen || !moveMatcher.test(fen)) {
-      return res.status(400).send("Missing fen");
+    if (!fen) {
+      return res.status(400).send("Missing next move");
+    }
+
+    if (!fen.split("-").every((x) => moveMatcher.test(x))) {
+      return res.status(400).send("Invalid FEN format");
     }
 
     // Craft a strict prompt asking the model to return a single move in UCI format.
@@ -39,7 +43,7 @@ app.post("/ai-move", async (req, res) => {
     const user = `FEN: ${fen}\nMove history: ${JSON.stringify(
       Array.isArray(history) ? history.map(String) : []
     )}\nRespond with one UCI move only.`;
-
+    console.log("Prompting model with:", user);
     // Use Chat Completions or Responses endpoint depending on availability.
     // Here we call the Chat Completions endpoint.
     const body = {
